@@ -1,0 +1,57 @@
+image: node:12
+
+cache:
+  paths:
+    - node_modules/
+
+before_script:
+  - apt-get update -yqq
+  - apt-get install rsync -yqq
+
+  - npm install
+
+deploy_dev:
+  stage: deploy
+  script:
+    - rm .env
+    - echo VUE_APP_API_URL=$DEV_API_BASE_URL >> .env
+    - npm run build
+
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+
+    - ssh-keyscan -H '192.185.216.91' >> ~/.ssh/known_hosts
+    - ssh-keyscan gitlab.com | sort -u - ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+
+    - cd ./dist && rsync -avz --rsh=ssh ./ $SSH_URL:$DEV_PATH
+  environment:
+    name: development
+    url: https://teladoc
+  only:
+    - develop
+
+deploy_prd:
+  stage: deploy
+  script:
+    - rm .env
+    - echo VUE_APP_API_URL=$PROD_API_BASE_URL >> .env
+    - npm run build
+
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+
+    - ssh-keyscan -H '192.185.216.91' >> ~/.ssh/known_hosts
+    - ssh-keyscan gitlab.com | sort -u - ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+
+    - cd ./dist && rsync -avz --rsh=ssh ./ $SSH_URL:$PROD_PATH
+  environment:
+    name: production
+    url: https://teladoc
+  when: manual
+  only:
+    - master
+
